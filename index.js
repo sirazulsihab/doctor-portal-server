@@ -4,10 +4,11 @@ const cors = require('cors');
 const admin = require("firebase-admin");
 require('dotenv').config();
 const { MongoClient } = require('mongodb');
+const ObjectId = require('mongodb').ObjectId;
 
 const port = process.env.PORT || 5000;
 
-const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
+const serviceAccount = ('./doctor-portal-9a104-firebase-adminsdk-7hp8e-576b4647ed.json');
 
 admin.initializeApp({
     credential: admin.credential.cert(serviceAccount)
@@ -16,14 +17,17 @@ admin.initializeApp({
 app.use(cors());
 app.use(express.json());
 
-const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster0.swu9d.mongodb.net/myFirstDatabase?retryWrites=true&w=majority`;
+// const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster0.swu9d.mongodb.net/myFirstDatabase?retryWrites=true&w=majority`;
+const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster0.otdtg.mongodb.net/myFirstDatabase?retryWrites=true&w=majority`;
+console.log(uri);
 
 const client = new MongoClient(uri, { useNewUrlParser: true, useUnifiedTopology: true });
 
 async function verifyToken(req, res, next) {
+    
     if (req.headers?.authorization?.startsWith('Bearer ')) {
         const token = req.headers.authorization.split(' ')[1];
-
+        
         try {
             const decodedUser = await admin.auth().verifyIdToken(token);
             req.decodedEmail = decodedUser.email;
@@ -31,12 +35,13 @@ async function verifyToken(req, res, next) {
         catch {
 
         }
-
+        
     }
     next();
 }
 
 async function run() {
+    console.log('server-connected')
     try {
         await client.connect();
         const database = client.db('doctors_portal');
@@ -52,11 +57,22 @@ async function run() {
             const cursor = appointmentsCollection.find(query);
             const appointments = await cursor.toArray();
             res.json(appointments);
+        });
+        app.get('/appointment/:id', async (req, res) => {
+            const id = req.params.id;
+            console.log(id);
+            const query = {_id : ObjectId(id)};
+
+            const cursor = appointmentsCollection.find(query);
+            const appointment = await cursor.toArray();
+            res.json(appointment);
         })
 
         app.post('/appointments', async (req, res) => {
             const appointment = req.body;
+            console.log(appointment)
             const result = await appointmentsCollection.insertOne(appointment);
+            console.log(result)
             res.json(result)
         });
 
