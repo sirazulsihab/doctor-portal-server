@@ -5,10 +5,11 @@ const admin = require("firebase-admin");
 require('dotenv').config();
 const { MongoClient } = require('mongodb');
 const ObjectId = require('mongodb').ObjectId;
+const stripe = require("stripe")(process.env.STRIPE_SECRET);
 
 const port = process.env.PORT || 5000;
 
-const serviceAccount = ('./doctor-portal-9a104-firebase-adminsdk-7hp8e-576b4647ed.json');
+const serviceAccount = ('./doctor-portal-firebase-adminsdk.json');
 
 admin.initializeApp({
     credential: admin.credential.cert(serviceAccount)
@@ -24,10 +25,10 @@ console.log(uri);
 const client = new MongoClient(uri, { useNewUrlParser: true, useUnifiedTopology: true });
 
 async function verifyToken(req, res, next) {
-    
+
     if (req.headers?.authorization?.startsWith('Bearer ')) {
         const token = req.headers.authorization.split(' ')[1];
-        
+
         try {
             const decodedUser = await admin.auth().verifyIdToken(token);
             req.decodedEmail = decodedUser.email;
@@ -35,7 +36,7 @@ async function verifyToken(req, res, next) {
         catch {
 
         }
-        
+
     }
     next();
 }
@@ -61,7 +62,7 @@ async function run() {
         app.get('/appointment/:id', async (req, res) => {
             const id = req.params.id;
             console.log(id);
-            const query = {_id : ObjectId(id)};
+            const query = { _id: ObjectId(id) };
 
             const cursor = appointmentsCollection.find(query);
             const appointment = await cursor.toArray();
@@ -75,6 +76,14 @@ async function run() {
             console.log(result)
             res.json(result)
         });
+        app.put('/appointment/:id', async (req, res) => {
+            const id = req.params.id;
+            const filter = {_id : ObjectId(id)}
+            const payment = req.body;
+            const updateDoc = {$set :{payment : payment}}
+            const result= await appointmentsCollection.updateOne(filter, updateDoc);
+            res.json(result);
+        })
 
         app.get('/users/:email', async (req, res) => {
             const email = req.params.email;
@@ -92,6 +101,18 @@ async function run() {
             const result = await usersCollection.insertOne(user);
             console.log(result);
             res.json(result);
+        });
+        app.post("/create-payment-intent", async (req, res) => {
+            const paymentInfo = req.body;
+            const amount = paymentInfo.price * 100;
+            const paymentIntent = await stripe.paymentIntents.create({
+                amount: amount,
+                currency: "usd",
+                automatic_payment_methods: {
+                    enabled: true,
+                },
+            })
+            res.json({clientSecret: paymentIntent.client_secret})
         });
 
         app.put('/users', async (req, res) => {
